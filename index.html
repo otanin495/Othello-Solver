@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>オセロソルバー</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+  :root {
+    --green: #1a7a2e;
+    --green-light: #2ea84a;
+    --green-dark: #0d4d1c;
+    --black: #0a0a0a;
+    --white: #f0ede8;
+    --gold: #d4a017;
+    --red: #c0392b;
+    --panel: #111;
+    --border: #2ea84a44;
+    --cs: 42px; /* cell size */
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0a;
+    color: var(--white);
+    font-family: 'Noto Sans JP', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    background-image:
+      radial-gradient(ellipse at 20% 0%, #1a7a2e22 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, #1a7a2e15 0%, transparent 50%);
+  }
+
+  h1 {
+    font-size: clamp(1.4rem, 4vw, 2rem);
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    color: var(--green-light);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+  .subtitle {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    color: #555;
+    letter-spacing: 0.2em;
+    margin-bottom: 24px;
+  }
+
+  .main {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    max-width: 940px;
+  }
+
+  .board-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    max-width: 100%;
+  }
+
+  /* Mode strip */
+  .mode-strip {
+    display: flex;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    width: 100%;
+  }
+  .mode-strip-btn {
+    flex: 1;
+    padding: 9px 6px;
+    border: none;
+    background: transparent;
+    color: #666;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .mode-strip-btn.active { background: var(--green-dark); color: var(--green-light); }
+  .mode-strip-btn:not(:last-child) { border-right: 1px solid var(--border); }
+
+  /* Turn selector */
+  .turn-selector {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 0.9rem;
+    width: 100%;
+    justify-content: center;
+  }
+  .turn-selector label { cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .turn-selector input[type=radio] { accent-color: var(--green-light); }
+
+  /* Sub-mode toggle (setup) */
+  .sub-strip {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+  }
+  .sub-btn {
+    flex: 1;
+    padding: 8px 6px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--panel);
+    color: #666;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .sub-btn.active { background: var(--green-dark); color: var(--green-light); border-color: var(--green-light); }
+
+  /* Stamp / play indicator bar */
+  .indicator-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    width: 100%;
+  }
+  .disk-mini {
+    width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  }
+  .disk-mini.black { background: radial-gradient(circle at 35% 35%, #444, #000); box-shadow: 1px 2px 4px #0009; }
+  .disk-mini.white { background: radial-gradient(circle at 35% 35%, #fff, #ccc); box-shadow: 1px 2px 4px #0005; }
+  .disk-mini.eraser { background: #333; border: 1px dashed #888; }
+  .indicator-bar .ib-label { color: #aaa; font-size: 0.8rem; }
+  .indicator-bar .ib-value { font-weight: 700; color: var(--green-light); }
+  .ib-btn {
+    background: #222; border: 1px solid #444; color: #aaa;
+    border-radius: 6px; padding: 3px 10px; font-size: 0.75rem;
+    cursor: pointer; font-family: 'Noto Sans JP', sans-serif;
+    transition: background 0.12s;
+  }
+  .ib-btn:hover { background: #333; color: #fff; }
+  .ml-auto { margin-left: auto; display:flex; gap:6px; }
+
+  #board-table {
+    border-collapse: collapse;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    color: #666;
+    box-shadow: 0 0 30px #1a7a2e55, 0 0 60px #1a7a2e22;
+  }
+  .lbl-corner { width: 20px; height: 20px; }
+  .col-lbl { width: var(--cs); height: 20px; text-align: center; vertical-align: middle; }
+  .row-lbl { width: 20px; height: var(--cs); text-align: center; vertical-align: middle; }
+  .cell {
+    width: var(--cs); height: var(--cs);
+    background: var(--green);
+    border: 1px solid var(--green-dark);
+    cursor: pointer; position: relative;
+    text-align: center; vertical-align: middle;
+    padding: 0;
+  }
+  .cell:hover { background: var(--green-light); }
+  .cell.corner { background: #155a22; }
+  #board-table .game-row td.cell:first-of-type { border-left: 2px solid var(--green-dark); }
+  #board-table .game-row td.cell:last-child { border-right: 2px solid var(--green-dark); }
+  #board-table .first-game-row td.cell { border-top: 2px solid var(--green-dark); }
+  #board-table .last-game-row td.cell { border-bottom: 2px solid var(--green-dark); }
+
+  .cell.legal::before {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.28);
+    pointer-events: none;
+  }
+  .cell.legal:hover::before { background: rgba(255,255,255,0.45); }
+
+  .disk {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    transition: transform 0.15s;
+    pointer-events: none;
+    display: inline-block;
+  }
+  .disk.black { background: radial-gradient(circle at 35% 35%, #444, #000); box-shadow: 2px 3px 8px #0009, inset 0 1px 2px #ffffff22; }
+  .disk.white { background: radial-gradient(circle at 35% 35%, #fff, #ccc); box-shadow: 2px 3px 8px #0005, inset 0 1px 2px #ffffffaa; }
+
+  .cell.best-move::after {
+    content: '★'; font-size: 1.4rem;
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--gold); text-shadow: 0 0 8px var(--gold);
+    animation: pulse 1s infinite alternate;
+    pointer-events: none;
+  }
+  .cell.candidate::after {
+    content: '◆'; font-size: 0.75rem;
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: #aaddffaa; pointer-events: none;
+  }
+
+  @keyframes pulse {
+    from { opacity: 0.7; font-size: 1.2rem; }
+    to { opacity: 1; font-size: 1.5rem; }
+  }
+
+  /* Panel */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    width: 260px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+
+  .score-display {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #555; border-radius: 8px; padding: 10px 14px;
+  }
+  .score-item { text-align: center; }
+  .score-item .label {
+    font-size: 0.7rem; color: #ddd; margin-bottom: 2px;
+    display: flex; align-items: center; gap: 4px; justify-content: center;
+  }
+  .score-item .value { font-family: 'Share Tech Mono', monospace; font-size: 1.6rem; font-weight: 700; }
+  .score-item.black .value { color: #111; }
+  .score-item.white .value { color: #fff; }
+  .disk-icon { width: 13px; height: 13px; border-radius: 50%; display: inline-block; }
+  .score-item.black .disk-icon { background: radial-gradient(circle at 35% 35%, #444, #000); border: 1px solid #555; }
+  .score-item.white .disk-icon { background: radial-gradient(circle at 35% 35%, #fff, #ccc); border: 1px solid #aaa; }
+  .score-sep { color: #333; font-size: 1.2rem; }
+
+  .btn {
+    background: var(--green-dark); border: 1px solid var(--green-light);
+    color: var(--green-light); padding: 10px 16px; border-radius: 8px;
+    cursor: pointer; font-family: 'Noto Sans JP', sans-serif;
+    font-size: 0.9rem; font-weight: 700; letter-spacing: 0.05em;
+    transition: background 0.15s, box-shadow 0.15s; width: 100%;
+  }
+  .btn:hover { background: #1f5c2e; box-shadow: 0 0 10px #2ea84a55; }
+  .btn.primary { background: var(--green-light); color: #000; font-size: 1rem; }
+  .btn.primary:hover { background: #38c85a; box-shadow: 0 0 14px #2ea84a88; }
+  .btn.danger { border-color: var(--red); color: var(--red); }
+  .btn.danger:hover { background: #2a0d0d; }
+
+  .result-box {
+    background: #1a1a1a; border-radius: 8px; padding: 14px;
+    font-size: 0.85rem; min-height: 80px; border-left: 3px solid var(--green-light);
+  }
+  .result-box .move-label {
+    font-family: 'Share Tech Mono', monospace; font-size: 1.8rem;
+    font-weight: 700; color: var(--gold); text-shadow: 0 0 10px var(--gold);
+  }
+  .result-box .thinking { color: #555; font-style: italic; }
+  .result-box .detail { color: #888; font-size: 0.78rem; margin-top: 6px; }
+  .result-box .tip { color: var(--green-light); font-size: 0.75rem; margin-top: 8px; line-height: 1.6; }
+
+  .depth-select { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: #888; }
+  .depth-select select {
+    background: #1a1a1a; border: 1px solid #333; color: var(--white);
+    padding: 4px 8px; border-radius: 4px; font-size: 0.82rem;
+  }
+
+  .mode-btns { display: flex; gap: 6px; }
+  .mode-btns .btn { font-size: 0.78rem; padding: 6px 10px; }
+
+  .instructions {
+    font-size: 0.75rem; color: #555; line-height: 1.7;
+    border-top: 1px solid #1f1f1f; padding-top: 10px;
+  }
+  .instructions strong { color: #888; }
+
+  @media (max-width: 620px) {
+    :root { --cs: 36px; }
+    .panel { width: 100%; max-width: 340px; }
+    .mode-strip, .turn-selector, .sub-strip, .indicator-bar { width: 100%; max-width: 340px; }
+    .disk { width: 26px; height: 26px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>オセロソルバー</h1>
+<p class="subtitle">OTHELLO ENDGAME SOLVER · ALPHA-BETA SEARCH</p>
+
+<div class="main">
+  <div class="board-section">
+
+    <!-- App mode -->
+    <div class="mode-strip">
+      <button class="mode-strip-btn active" id="btn-app-setup" onclick="setAppMode('setup')">盤面設定</button>
+      <button class="mode-strip-btn" id="btn-app-play" onclick="setAppMode('play')">対局モード</button>
+    </div>
+
+    <!-- Turn selector -->
+    <div class="turn-selector">
+      <span>手番：</span>
+      <label><input type="radio" name="turn" value="black" checked>黒</label>
+      <label><input type="radio" name="turn" value="white">白</label>
+    </div>
+
+    <!-- Setup sub-mode (only in setup) -->
+    <div class="sub-strip" id="setup-substrip">
+      <button class="sub-btn active" id="btn-cycle" onclick="setSetupSub('cycle')">クリックで切替</button>
+      <button class="sub-btn" id="btn-stamp" onclick="setSetupSub('stamp')">スタンプ配置</button>
+    </div>
+
+    <!-- Stamp picker (only in stamp sub-mode) -->
+    <div class="indicator-bar" id="stamp-bar" style="display:none;">
+      <div class="disk-mini black" id="stamp-icon"></div>
+      <span class="ib-label">置く石：</span>
+      <span class="ib-value" id="stamp-label">黒</span>
+      <div class="ml-auto">
+        <button class="ib-btn" onclick="cycleStampColor()">切替</button>
+        <button class="ib-btn" onclick="setEraser()">消しゴム</button>
+      </div>
+    </div>
+
+    <!-- Play mode indicator -->
+    <div class="indicator-bar" id="play-bar" style="display:none;">
+      <div class="disk-mini black" id="play-icon"></div>
+      <span class="ib-label">手番：</span>
+      <span class="ib-value" id="play-label">黒</span>
+    </div>
+
+    <!-- Board rendered as a table by JS -->
+    <div id="board-wrap"></div>
+  </div>
+
+  <div class="panel">
+    <div class="score-display">
+      <div class="score-item black">
+        <div class="label"><span class="disk-icon"></span>黒</div>
+        <div class="value" id="black-count">0</div>
+      </div>
+      <div class="score-sep">–</div>
+      <div class="score-item white">
+        <div class="label"><span class="disk-icon"></span>白</div>
+        <div class="value" id="white-count">0</div>
+      </div>
+    </div>
+
+    <div class="depth-select">
+      <span>探索深さ：</span>
+      <select id="depth">
+        <option value="4">4手（雑）</option>
+        <option value="6" selected>6手（普通）</option>
+        <option value="8">8手（まぁ重ぇ）</option>
+        <option value="12">12手（重すぎ）</option>
+      </select>
+    </div>
+
+    <button class="btn primary" onclick="solve()">最善手を探す</button>
+
+    <div class="result-box" id="result">
+      <div class="thinking">盤面を入力して「最善手を探す」を押してください</div>
+    </div>
+
+    <div class="mode-btns">
+      <button class="btn" onclick="setStartPos()">初期配置</button>
+      <button class="btn danger" onclick="clearBoard()">クリア</button>
+    </div>
+
+    <div class="instructions">
+      <strong>盤面設定：</strong><br>
+      「クリックで切替」→ 空→●→○→空 と循環するのだ<br>
+      「スタンプ」→ 色を選んでクリックで配置するのだ<br><br>
+      <strong>対局モード：</strong><br>
+      手番の石を合法手(●)に置けるのだ<br><br>
+      <strong>最善手探索後：</strong><br>
+      ★=最善 ◆=次候補 ●=その他の合法手<br>
+      どれもクリックで石を置けるのだ<br><br>
+      <strong>注意：</strong><br>
+      このサイトはClaude(Anthropic)を利用して作成したのだ<br>きつい探索は無理なのだ<br>あくまで終盤用なのだ<br>何手読ませるかは自己判断なのだ
+    </div>
+  </div>
+</div>
+
+<script>
+const SIZE = 8;
+let board = Array.from({length: SIZE}, () => new Array(SIZE).fill(0));
+
+// State
+let appMode = 'setup';        // 'setup' | 'play'
+let setupSub = 'cycle';       // 'cycle' | 'stamp'
+let stampColor = 1;           // 1=black, 2=white, 0=eraser
+let solvedMoves = null;       // [{r,c,val}] sorted best-first, after solve
+let solvedPlayer = null;
+
+const boardWrap = document.getElementById('board-wrap');
+const table = document.createElement('table');
+table.id = 'board-table';
+
+const cellEls = [];
+
+const thead = document.createElement('thead');
+const headRow = document.createElement('tr');
+const cornerTh = document.createElement('td');
+cornerTh.className = 'lbl-corner';
+headRow.appendChild(cornerTh);
+'abcdefgh'.split('').forEach(ch => {
+  const th = document.createElement('td');
+  th.className = 'col-lbl';
+  th.textContent = ch;
+  headRow.appendChild(th);
+});
+thead.appendChild(headRow);
+table.appendChild(thead);
+
+const tbody = document.createElement('tbody');
+for (let r = 0; r < SIZE; r++) {
+  cellEls.push([]);
+  const tr = document.createElement('tr');
+  tr.className = 'game-row';
+  if (r === 0) tr.classList.add('first-game-row');
+  if (r === 7) tr.classList.add('last-game-row');
+
+  // row label
+  const rowTd = document.createElement('td');
+  rowTd.className = 'row-lbl';
+  rowTd.textContent = r + 1;
+  tr.appendChild(rowTd);
+
+  // cells
+  for (let c = 0; c < SIZE; c++) {
+    const td = document.createElement('td');
+    td.className = 'cell';
+    if ((r === 0 || r === 7) && (c === 0 || c === 7)) td.classList.add('corner');
+    td.addEventListener('click', () => onCellClick(r, c));
+    tr.appendChild(td);
+    cellEls[r].push(td);
+  }
+  tbody.appendChild(tr);
+}
+table.appendChild(tbody);
+boardWrap.appendChild(table);
+
+// ---- MODE CONTROLS ----
+function setAppMode(mode) {
+  appMode = mode;
+  clearSolve();
+  document.getElementById('btn-app-setup').classList.toggle('active', mode === 'setup');
+  document.getElementById('btn-app-play').classList.toggle('active', mode === 'play');
+  document.getElementById('setup-substrip').style.display = mode === 'setup' ? 'flex' : 'none';
+  document.getElementById('stamp-bar').style.display = (mode === 'setup' && setupSub === 'stamp') ? 'flex' : 'none';
+  document.getElementById('play-bar').style.display = mode === 'play' ? 'flex' : 'none';
+  syncPlayIndicator();
+  renderBoard();
+}
+
+function setSetupSub(sub) {
+  setupSub = sub;
+  clearSolve();
+  document.getElementById('btn-cycle').classList.toggle('active', sub === 'cycle');
+  document.getElementById('btn-stamp').classList.toggle('active', sub === 'stamp');
+  document.getElementById('stamp-bar').style.display = sub === 'stamp' ? 'flex' : 'none';
+}
+
+function cycleStampColor() {
+  stampColor = stampColor === 1 ? 2 : stampColor === 2 ? 0 : 1;
+  syncStampUI();
+}
+function setEraser() { stampColor = 0; syncStampUI(); }
+
+function syncStampUI() {
+  const icon = document.getElementById('stamp-icon');
+  const label = document.getElementById('stamp-label');
+  icon.className = 'disk-mini ' + (stampColor === 1 ? 'black' : stampColor === 2 ? 'white' : 'eraser');
+  label.textContent = stampColor === 1 ? '黒' : stampColor === 2 ? '白' : '消しゴム';
+}
+
+function syncPlayIndicator() {
+  const p = currentPlayerNum();
+  const pName = p === 1 ? 'black' : 'white';
+  document.getElementById('play-icon').className = 'disk-mini ' + pName;
+  document.getElementById('play-label').textContent = p === 1 ? '黒' : '白';
+}
+
+function currentPlayerNum() {
+  return document.querySelector('input[name=turn]:checked').value === 'black' ? 1 : 2;
+}
+function currentPlayerName() {
+  return document.querySelector('input[name=turn]:checked').value;
+}
+
+document.querySelectorAll('input[name=turn]').forEach(el => el.addEventListener('change', () => {
+  clearSolve();
+  syncPlayIndicator();
+  renderBoard();
+}));
+
+// ---- CELL CLICK ----
+function onCellClick(r, c) {
+  // After solve: all legal moves are clickable
+  if (solvedMoves !== null) {
+    const player = solvedPlayer;
+    if (getFlips(board, r, c, player).length > 0) {
+      placeStone(r, c, player);
+      advanceTurn(player);
+      clearSolve();
+      renderBoard();
+      document.getElementById('result').innerHTML =
+        `<div class="thinking">${'abcdefgh'[c]}${r+1} に石を置いたのだ。次は${currentPlayerName() === 'black' ? '黒' : '白'}番なのだ。</div>`;
+    }
+    return;
+  }
+
+  // Play mode: legal moves only
+  if (appMode === 'play') {
+    const player = currentPlayerNum();
+    if (getFlips(board, r, c, player).length === 0) return;
+    placeStone(r, c, player);
+    advanceTurn(player);
+    renderBoard();
+    return;
+  }
+
+  // Setup mode
+  if (setupSub === 'cycle') {
+    board[r][c] = (board[r][c] + 1) % 3;
+  } else {
+    board[r][c] = stampColor === 0 ? 0 : stampColor;
+  }
+  renderBoard();
+}
+
+function placeStone(r, c, player) {
+  const flips = getFlips(board, r, c, player);
+  board[r][c] = player;
+  for (const [fr, fc] of flips) board[fr][fc] = player;
+}
+
+function advanceTurn(player) {
+  const next = player === 1 ? 'white' : 'black';
+  document.querySelector(`input[name=turn][value=${next}]`).checked = true;
+  syncPlayIndicator();
+}
+
+// ---- RENDER ----
+function renderBoard() {
+  const player = currentPlayerNum();
+
+  // Compute legal moves to show dots
+  const legalSet = new Set();
+  if (solvedMoves !== null) {
+    for (const m of solvedMoves) legalSet.add(m.r * 8 + m.c);
+  } else if (appMode === 'play') {
+    for (const [r, c] of getLegalMoves(board, player)) legalSet.add(r * 8 + c);
+  }
+
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      const cell = cellEls[r][c];
+      const isCorner = (r === 0 || r === 7) && (c === 0 || c === 7);
+      cell.className = 'cell' + (isCorner ? ' corner' : '');
+      cell.innerHTML = '';
+
+      const v = board[r][c];
+      if (v !== 0) {
+        const disk = document.createElement('div');
+        disk.className = 'disk ' + (v === 1 ? 'black' : 'white');
+        cell.appendChild(disk);
+      } else if (legalSet.has(r * 8 + c)) {
+        cell.classList.add('legal');
+      }
+    }
+  }
+
+  // Apply solve overlays on top
+  if (solvedMoves !== null) {
+    const best = solvedMoves[0];
+    cellEls[best.r][best.c].classList.remove('legal');
+    cellEls[best.r][best.c].classList.add('best-move');
+    for (const m of solvedMoves.slice(1, 4)) {
+      cellEls[m.r][m.c].classList.remove('legal');
+      cellEls[m.r][m.c].classList.add('candidate');
+    }
+  }
+
+  updateCounts();
+}
+
+function clearSolve() {
+  solvedMoves = null;
+  solvedPlayer = null;
+}
+
+function updateCounts() {
+  let b = 0, w = 0;
+  for (let r = 0; r < SIZE; r++)
+    for (let c = 0; c < SIZE; c++) {
+      if (board[r][c] === 1) b++;
+      else if (board[r][c] === 2) w++;
+    }
+  document.getElementById('black-count').textContent = b;
+  document.getElementById('white-count').textContent = w;
+}
+
+// ---- OTHELLO LOGIC ----
+const DIRS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+
+function getFlips(b, r, c, player) {
+  if (b[r][c] !== 0) return [];
+  const opp = 3 - player;
+  const flips = [];
+  for (const [dr, dc] of DIRS) {
+    const line = [];
+    let nr = r + dr, nc = c + dc;
+    while (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE && b[nr][nc] === opp) {
+      line.push([nr, nc]); nr += dr; nc += dc;
+    }
+    if (line.length > 0 && nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE && b[nr][nc] === player)
+      flips.push(...line);
+  }
+  return flips;
+}
+
+function getLegalMoves(b, player) {
+  const moves = [];
+  for (let r = 0; r < SIZE; r++)
+    for (let c = 0; c < SIZE; c++)
+      if (getFlips(b, r, c, player).length > 0) moves.push([r, c]);
+  return moves;
+}
+
+function applyMove(b, r, c, player) {
+  const nb = b.map(row => [...row]);
+  const flips = getFlips(b, r, c, player);
+  nb[r][c] = player;
+  for (const [fr, fc] of flips) nb[fr][fc] = player;
+  return nb;
+}
+
+function countDisks(b, player) {
+  let cnt = 0;
+  for (let r = 0; r < SIZE; r++)
+    for (let c = 0; c < SIZE; c++)
+      if (b[r][c] === player) cnt++;
+  return cnt;
+}
+
+const WEIGHTS = [
+  [120,-20, 20,  5,  5, 20,-20,120],
+  [-20,-40, -5, -5, -5, -5,-40,-20],
+  [ 20, -5, 15,  3,  3, 15, -5, 20],
+  [  5, -5,  3,  3,  3,  3, -5,  5],
+  [  5, -5,  3,  3,  3,  3, -5,  5],
+  [ 20, -5, 15,  3,  3, 15, -5, 20],
+  [-20,-40, -5, -5, -5, -5,-40,-20],
+  [120,-20, 20,  5,  5, 20,-20,120]
+];
+
+function evaluate(b, player) {
+  const empty = b.flat().filter(v => v === 0).length;
+  if (empty === 0 || empty <= 10) return countDisks(b, player) - countDisks(b, 3 - player);
+  let score = 0;
+  for (let r = 0; r < SIZE; r++)
+    for (let c = 0; c < SIZE; c++) {
+      if (b[r][c] === player) score += WEIGHTS[r][c];
+      else if (b[r][c] === 3 - player) score -= WEIGHTS[r][c];
+    }
+  score += 10 * (getLegalMoves(b, player).length - getLegalMoves(b, 3 - player).length);
+  return score;
+}
+
+function alphaBeta(b, depth, alpha, beta, player, maximizing) {
+  const moves = getLegalMoves(b, player);
+  const empty = b.flat().filter(v => v === 0).length;
+  if (depth === 0 || empty === 0) return evaluate(b, maximizing ? player : 3 - player);
+  if (moves.length === 0) {
+    const opp = 3 - player;
+    if (getLegalMoves(b, opp).length === 0) {
+      const me = maximizing ? player : 3 - player;
+      return countDisks(b, me) - countDisks(b, 3 - me);
+    }
+    return alphaBeta(b, depth - 1, alpha, beta, opp, !maximizing);
+  }
+  if (maximizing) {
+    let best = -Infinity;
+    for (const [r, c] of moves) {
+      const val = alphaBeta(applyMove(b, r, c, player), depth - 1, alpha, beta, 3 - player, false);
+      best = Math.max(best, val); alpha = Math.max(alpha, best);
+      if (beta <= alpha) break;
+    }
+    return best;
+  } else {
+    let best = Infinity;
+    for (const [r, c] of moves) {
+      const val = alphaBeta(applyMove(b, r, c, player), depth - 1, alpha, beta, 3 - player, true);
+      best = Math.min(best, val); beta = Math.min(beta, best);
+      if (beta <= alpha) break;
+    }
+    return best;
+  }
+}
+
+function solve() {
+  const player = currentPlayerNum();
+  const depth = parseInt(document.getElementById('depth').value);
+  const moves = getLegalMoves(board, player);
+  const resultEl = document.getElementById('result');
+
+  if (moves.length === 0) {
+    resultEl.innerHTML = '<div class="thinking">打てる手がないのだ（パス）</div>';
+    return;
+  }
+
+  clearSolve();
+  resultEl.innerHTML = '<div class="thinking">解析中なのだ…</div>';
+
+  setTimeout(() => {
+    const scored = [];
+    for (const [r, c] of moves) {
+      const val = alphaBeta(applyMove(board, r, c, player), depth - 1, -Infinity, Infinity, 3 - player, false);
+      scored.push({r, c, val});
+    }
+    scored.sort((a, b) => b.val - a.val);
+
+    solvedMoves = scored;
+    solvedPlayer = player;
+
+    const best = scored[0];
+    const pos = `${'abcdefgh'[best.c]}${best.r + 1}`;
+    const others = scored.slice(1).map(m => `${'abcdefgh'[m.c]}${m.r+1}(${m.val>0?'+':''}${m.val})`).join(', ');
+
+    renderBoard();
+
+    resultEl.innerHTML = `
+      <div style="margin-bottom:6px; font-size:0.78rem; color:#888;">最善手</div>
+      <div class="move-label">${pos}</div>
+      <div class="detail">評価値: ${best.val > 0 ? '+' : ''}${best.val}</div>
+      <div class="detail" style="margin-top:4px;">候補手: ${others || 'なし'}</div>
+      <div class="tip">★=最善 ◆=次候補 ●=合法手<br>どこでもクリックで石を置けるのだ</div>
+    `;
+  }, 30);
+}
+
+function clearBoard() {
+  board = Array.from({length: SIZE}, () => new Array(SIZE).fill(0));
+  clearSolve();
+  document.getElementById('result').innerHTML = '<div class="thinking">盤面をクリアしたのだ</div>';
+  renderBoard();
+}
+
+function setStartPos() {
+  board = Array.from({length: SIZE}, () => new Array(SIZE).fill(0));
+  board[3][3] = 2; board[3][4] = 1;
+  board[4][3] = 1; board[4][4] = 2;
+  clearSolve();
+  document.getElementById('result').innerHTML = '<div class="thinking">初期配置をセットしたのだ</div>';
+  renderBoard();
+}
+
+// Init
+syncStampUI();
+syncPlayIndicator();
+renderBoard();
+</script>
+</body>
+</html>
